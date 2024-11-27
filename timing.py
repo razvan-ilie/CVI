@@ -10,21 +10,25 @@ start = time.perf_counter()
 for _ in range(n_trials):
     slc = CviSlice(
         atm_var=0.2 * 0.2,
-        skew=2.0,
+        skew=5.0,
         nodes=[
-            CviNode(-2.0, 0.0),
-            CviNode(-1.0, 1.0),
-            CviNode(0.0, 2.0),
-            CviNode(1.0, 1.0),
-            CviNode(2.0, 0.0),
+            CviNode(-6.0, 0.0),
+            CviNode(-4.0, 0.03),
+            CviNode(-2.0, 0.06),
+            CviNode(0.0, 0.12),
+            CviNode(2.0, 0.03),
+            CviNode(4.0, 0.015),
+            CviNode(6.0, 0.0),
         ],
         ref_fwd=100.0
     )
 
-    log_mns = np.array([-3.5, -3.0, -2.5, -2.0, -1.5, -1.0, -0.5, -0.4, -0.3, -0.2, -0.1, -0.05, 0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5])
-    # log_mns = np.linspace(-3.5, 2.0)
+    log_mns = np.linspace(-8, 8.0, num=3000)
+    log_mns_coarse = np.array([-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 6.0])
     strikes = 100 * np.exp(log_mns)
-    vols = slc.vol_deriv1_deriv2_z(log_mns)
+    strikes_coarse = 100 * np.exp(log_mns)
+    vols = slc.var_deriv1_deriv2_z(log_mns)
+    vols_coarse = slc.var_deriv1_deriv2_z(log_mns_coarse)
 end = time.perf_counter()
 print(f"{end - start:.5f}")
 
@@ -37,8 +41,14 @@ print(f"{end - start:.5f}")
 
 fig, ax = plt.subplots(3, 1, sharex="all")
 ax[0].plot(log_mns, vols[0])
+ax[0].plot(log_mns_coarse[3], vols_coarse[0][3], 'ro')
+ax[0].grid()
 ax[1].plot(log_mns, vols[1])
+ax[1].plot(log_mns_coarse[3], vols_coarse[1][3], 'ro')
+ax[1].grid()
 ax[2].plot(log_mns, vols[2])
+ax[2].plot(log_mns_coarse, vols_coarse[2], 'ro')
+ax[2].grid()
 plt.show()
 
 x = 1

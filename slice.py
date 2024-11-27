@@ -71,9 +71,55 @@ class CviSlice:
         if self._nodes[-1].crv != 0.0:
             raise ValueError("Last node must have a curvature of 0")
 
-        self.calc_spline_params()
+        self._calc_spline_params_analytic()
 
-    def calc_spline_params(self):
+    def _calc_spline_params_analytic(self):
+        num_polys = len(self._nodes) + 1
+        params = np.ndarray(shape=(num_polys, 4), dtype=float)
+
+        crvs = np.array([n.crv for n in self._nodes])
+        locs = np.array([n.loc for n in self._nodes])
+
+        params[1:num_polys-1, 0] = (
+            (crvs[:num_polys-2] - crvs[1:num_polys-1]) /
+            (locs[:num_polys-2] - locs[1:num_polys-1]) /
+            6.0
+        )
+        params[1:num_polys-1, 1] = 0.5 * crvs[1:num_polys-1] - 3.0 * params[1:num_polys-1, 0] * locs[1:num_polys-1]
+        params[0, 0] = params[-1, 0] = 0.0
+        params[0, 1] = 0.5 * crvs[0]
+        params[-1, 1] = 0.5 * crvs[-1]
+
+        params[self._zero_idx, 3] = params[self._zero_idx + 1, 3] = self._atm_var
+        params[self._zero_idx, 2] = params[self._zero_idx + 1, 2] = self._skew
+
+        for i in range(self._zero_idx - 1, -1, -1):
+            loc_sq = locs[i] * locs[i]
+            loc_cb = loc_sq * locs[i]
+            params[i, 2] = (
+                (3.0 * params[i+1, 0] * loc_sq + 2.0 * params[i+1, 1] * locs[i] + params[i+1, 2]) -
+                (3.0 * params[i, 0] * loc_sq + 2.0 * params[i, 1] * locs[i])
+            )
+            params[i, 3] = (
+                (params[i+1, 0] * loc_cb + params[i+1, 1] * loc_sq + params[i+1, 2] * locs[i] + params[i+1, 3]) -
+                (params[i, 0] * loc_cb + params[i, 1] * loc_sq + params[i, 2] * locs[i])
+            )
+
+        for i in range(self._zero_idx + 1, num_polys - 1):
+            loc_sq = locs[i] * locs[i]
+            loc_cb = loc_sq * locs[i]
+            params[i+1, 2] = (
+                (3.0 * params[i, 0] * loc_sq + 2.0 * params[i, 1] * locs[i] + params[i, 2]) -
+                (3.0 * params[i+1, 0] * loc_sq + 2.0 * params[i+1, 1] * locs[i])
+            )
+            params[i+1, 3] = (
+                (params[i, 0] * loc_cb + params[i, 1] * loc_sq + params[i, 2] * locs[i] + params[i, 3]) -
+                (params[i+1, 0] * loc_cb + params[i+1, 1] * loc_sq + params[i+1, 2] * locs[i])
+            )
+
+        self._cubic_spline = CubicSpline(locs, params)
+
+    def _calc_spline_params_matrix(self):
         num_params = 4 * len(self._nodes) + 4
         num_nodes = len(self._nodes)
         A = np.zeros((num_params, num_params))
