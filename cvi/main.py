@@ -6,7 +6,10 @@ import time
 n_trials = 1000
 
 start = time.perf_counter()
-for _ in range(n_trials):
+for i in range(n_trials):
+    if i == 1:
+        # after numba functions are jit compiled
+        start = time.perf_counter()
     slc = CviSlice(
         atm_var=0.2 * 0.2,
         skew=5.0,

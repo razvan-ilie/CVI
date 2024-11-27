@@ -1,3 +1,4 @@
+import numba
 import numpy as np
 import numpy.typing as npt
 
@@ -46,6 +47,8 @@ class CviSlice:
     _ref_fwd: float
     _zero_idx: int
     _cubic_spline: CubicSpline
+    _crvs: npt.NDArray[np.float64]
+    _locs: npt.NDArray[np.float64]
 
     def __init__(
         self, atm_var: float, skew: float, nodes: list[CviNode], ref_fwd: float
@@ -67,14 +70,22 @@ class CviSlice:
         if self._nodes[-1].crv != 0.0:
             raise ValueError("Last node must have a curvature of 0")
 
+        self._crvs = np.array([n.crv for n in self._nodes])
+        self._locs = np.array([n.loc for n in self._nodes])
+
         self._calc_spline_params()
 
-    def _calc_spline_params(self):
-        num_polys = len(self._nodes) + 1
-        params = np.ndarray(shape=(num_polys, 4), dtype=float)
-
-        crvs = np.array([n.crv for n in self._nodes])
-        locs = np.array([n.loc for n in self._nodes])
+    @staticmethod
+    @numba.jit
+    def _calc_spline_params_numba(
+        atm_var: float,
+        skew: float,
+        locs: npt.NDArray[np.float64],
+        crvs: npt.NDArray[np.float64],
+        zero_idx: int,
+    ):
+        num_polys = len(locs) + 1
+        params = np.empty(shape=(num_polys, 4), dtype=float)
 
         params[1 : num_polys - 1, 0] = (
             (crvs[: num_polys - 2] - crvs[1 : num_polys - 1])
@@ -89,10 +100,10 @@ class CviSlice:
         params[0, 1] = 0.5 * crvs[0]
         params[-1, 1] = 0.5 * crvs[-1]
 
-        params[self._zero_idx, 3] = params[self._zero_idx + 1, 3] = self._atm_var
-        params[self._zero_idx, 2] = params[self._zero_idx + 1, 2] = self._skew
+        params[zero_idx, 3] = params[zero_idx + 1, 3] = atm_var
+        params[zero_idx, 2] = params[zero_idx + 1, 2] = skew
 
-        for i in range(self._zero_idx - 1, -1, -1):
+        for i in range(zero_idx - 1, -1, -1):
             loc_sq = locs[i] * locs[i]
             loc_cb = loc_sq * locs[i]
             params[i, 2] = (
@@ -107,7 +118,7 @@ class CviSlice:
                 + params[i + 1, 3]
             ) - (params[i, 0] * loc_cb + params[i, 1] * loc_sq + params[i, 2] * locs[i])
 
-        for i in range(self._zero_idx + 1, num_polys - 1):
+        for i in range(zero_idx + 1, num_polys - 1):
             loc_sq = locs[i] * locs[i]
             loc_cb = loc_sq * locs[i]
             params[i + 1, 2] = (
@@ -126,7 +137,13 @@ class CviSlice:
                 + params[i + 1, 2] * locs[i]
             )
 
-        self._cubic_spline = CubicSpline(locs, params)
+        return params
+
+    def _calc_spline_params(self):
+        params = self._calc_spline_params_numba(
+            self._atm_var, self._skew, self._locs, self._crvs, self._zero_idx
+        )
+        self._cubic_spline = CubicSpline(self._locs, params)
 
     def __call__(self, z: npt.NDArray[np.float64] | float) -> npt.NDArray[np.float64]:
         return np.sqrt(self._cubic_spline(z)[0])
