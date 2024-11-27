@@ -1,7 +1,7 @@
 [project]
 name = "cvi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Implementation of Convex Volatility Interpolation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,5 +12,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.0.1",
     "ruff>=0.7.3",
 ]
