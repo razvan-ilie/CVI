@@ -1,4 +1,3 @@
-from scipy import interpolate
 from slice import CviSlice, CviNode
 from matplotlib import pyplot as plt
 import numpy as np
@@ -20,7 +19,7 @@ for _ in range(n_trials):
             CviNode(4.0, 0.015),
             CviNode(6.0, 0.0),
         ],
-        ref_fwd=100.0
+        ref_fwd=100.0,
     )
 
     log_mns = np.linspace(-8, 8.0, num=3000)
@@ -41,13 +40,13 @@ print(f"{end - start:.5f}")
 
 fig, ax = plt.subplots(3, 1, sharex="all")
 ax[0].plot(log_mns, vols[0])
-ax[0].plot(log_mns_coarse[3], vols_coarse[0][3], 'ro')
+ax[0].plot(log_mns_coarse[3], vols_coarse[0][3], "ro")
 ax[0].grid()
 ax[1].plot(log_mns, vols[1])
-ax[1].plot(log_mns_coarse[3], vols_coarse[1][3], 'ro')
+ax[1].plot(log_mns_coarse[3], vols_coarse[1][3], "ro")
 ax[1].grid()
 ax[2].plot(log_mns, vols[2])
-ax[2].plot(log_mns_coarse, vols_coarse[2], 'ro')
+ax[2].plot(log_mns_coarse, vols_coarse[2], "ro")
 ax[2].grid()
 plt.show()
 
