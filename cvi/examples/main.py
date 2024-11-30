@@ -24,6 +24,7 @@ for i in range(n_trials):
             CviNode(6.0, 0.0),
         ],
         ref_fwd=100.0,
+        t_e=1.0,
     )
 
     log_mns = np.linspace(-8, 8.0, num=3000)
