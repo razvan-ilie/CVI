@@ -1,8 +1,9 @@
 import numpy as np
 import numpy.typing as npt
 from math import sqrt
-from scipy.interpolate import BSpline
+from scipy.interpolate import BSpline, splev
 from scipy.linalg import solve
+from typing import cast
 
 
 class CviNode:
@@ -19,18 +20,16 @@ class CviNode:
 
 class CviSlice:
     _atm_var: float
-    # d variance / d log(mns)
-    _skew: float
+    _skew: float  # d variance / d log(mns)
     _nodes: list[CviNode]
     _ref_fwd: float
     # time to expiry
     _t_e: float
     _atm_anchor_var: float
-    # denominator when calculating z coordinate
-    _z_denom: float
+    _z_denom: float  # denominator when calculating z coordinate
     _zero_idx: int
-    _crvs: npt.NDArray[np.float64]
-    _locs: npt.NDArray[np.float64]
+    _crvs: list[float]
+    _locs: list[float]
     _bspline: BSpline
     _deriv_left: float
     _deriv_right: float
@@ -64,35 +63,35 @@ class CviSlice:
         self._t_e = t_e
         self._atm_anchor_var = atm_anchor_var or atm_var
         self._z_denom = sqrt(self._atm_anchor_var * t_e)
-        self._crvs = np.array([n.crv for n in self._nodes])
-        self._locs = np.array([n.loc for n in self._nodes])
+        self._crvs = [n.crv for n in self._nodes]
+        self._locs = [n.loc for n in self._nodes]
 
         self._init_bspline()
 
     def _init_bspline(self):
-        knots = np.concatenate(
-            [
-                [self._locs[0] - 4e-10 + (i + 1) * 1e-10 for i in range(3)],
-                self._locs,
-                [self._locs[-1] + (i + 1) * 1e-10 for i in range(3)],
-            ]
-        )
-        degree = 3
-        basis_funcs = [
-            BSpline.basis_element(knots[i : i + degree + 2], extrapolate=False)
-            for i in range(len(knots) - degree - 1)
-        ]
+        knots = np.array([self._locs[0]] * 3 + self._locs + [self._locs[-1]] * 3)
         n = len(self._locs) + 2
+
+        c = [0.0] * n
         mat = np.zeros((n, n))
-        for i, basis_func in enumerate(basis_funcs):
-            mat[: n - 2, i] = np.nan_to_num(basis_func(self._locs, nu=2))
-            mat[n - 2, i] = np.nan_to_num(basis_func(0.0, nu=1))
-            mat[n - 1, i] = np.nan_to_num(basis_func(0.0))
-        b = np.concatenate([self._crvs, [self._skew, self._atm_var]])
+        for i in range(n):
+            c[i] = 1.0
+            if i != 0:
+                c[i - 1] = 0.0
+            mat[: n - 2, i] = splev(self._locs, (knots, c, 3), der=2, ext=1)
+            mat[n - 2, i] = splev(0.0, (knots, c, 3), der=1, ext=1)
+            mat[n - 1, i] = splev(0.0, (knots, c, 3), der=0, ext=1)
+
+        b = self._crvs + [self._skew, self._atm_var]
         c = solve(mat, b)
-        self._bspline = BSpline(knots, c, 3, extrapolate=False)
-        self._deriv_left = self._bspline(self._locs[0], nu=1)
-        self._deriv_right = self._bspline(self._locs[-1], nu=1)
+
+        self._bspline_tck = (knots, c, 3)
+
+        derivs: np.ndarray = splev(
+            [self._locs[0], self._locs[-1]], self._bspline_tck, der=1, ext=1
+        )
+        self._deriv_left = cast(float, derivs[0])
+        self._deriv_right = cast(float, derivs[1])
 
     def __call__(self, z: npt.NDArray[np.float64] | float) -> npt.NDArray[np.float64]:
         return np.sqrt(self._bspline(z))
@@ -104,17 +103,14 @@ class CviSlice:
     ]:
         right_extrap = np.where(z <= self._locs[-1], 0.0, z - self._locs[-1])
         left_extrap = np.where(z >= self._locs[0], 0.0, z - self._locs[0])
-        middle = np.where(
-            z < self._locs[0],
-            self._locs[0],
-            np.where(z > self._locs[-1], self._locs[-1], z),
-        )
         return (
-            self._bspline(middle)
+            splev(z, self._bspline_tck, ext=3)
             + right_extrap * self._deriv_right
             + left_extrap * self._deriv_left,
-            self._bspline(middle, nu=1),
-            self._bspline(middle, nu=2),
+            splev(z, self._bspline_tck, der=1, ext=1)
+            + (z < self._locs[0]) * self._deriv_left
+            + (z > self._locs[-1]) * self._deriv_right,
+            splev(z, self._bspline_tck, der=2, ext=1),
         )
 
     def vol_deriv1_deriv2_z(

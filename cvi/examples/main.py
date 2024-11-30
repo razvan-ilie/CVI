@@ -31,7 +31,7 @@ for i in range(n_trials):
     vols = slc.var_deriv1_deriv2_z(log_mns)
     vols_coarse = slc.var_deriv1_deriv2_z(log_mns_coarse)
 end = time.perf_counter()
-print(f"{end - start:.5f}")
+print(f"{end - start:.5f}s --- {(end - start)/n_trials:.5f}s/it")
 
 # start = time.perf_counter()
 # for _ in range(n_trials):
