@@ -1,7 +1,8 @@
-from slice import CviSlice, CviNode
 from matplotlib import pyplot as plt
 import numpy as np
 import time
+
+from cvi.slice import CviSlice, CviNode
 
 n_trials = 1000
 
