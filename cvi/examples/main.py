@@ -2,24 +2,28 @@ from matplotlib import pyplot as plt
 import numpy as np
 import time
 
-from cvi.slice import CviSlice, CviNode
+from cvi.slice import CviSlice
+from cvi.node import CviNode
+from cvi.params import CviRealParams
 
 n_trials = 1000
 
 start = time.perf_counter()
 for i in range(n_trials):
-    slc = CviSlice(
-        atm_var=0.2 * 0.2,
-        skew=5.0,
-        nodes=[
-            CviNode(-6.0, 0.0),
-            CviNode(-4.0, 0.03),
-            CviNode(-2.0, 0.06),
-            CviNode(0.0, 0.12),
-            CviNode(2.0, 0.03),
-            CviNode(4.0, 0.015),
-            CviNode(6.0, 0.0),
-        ],
+    slc = CviSlice.from_real_params(
+        CviRealParams(
+            atm_var=0.2 * 0.2,
+            skew=5.0,
+            nodes=[
+                CviNode(-6.0, 0.0),
+                CviNode(-4.0, 0.03),
+                CviNode(-2.0, 0.06),
+                CviNode(0.0, 0.12),
+                CviNode(2.0, 0.03),
+                CviNode(4.0, 0.015),
+                CviNode(6.0, 0.0),
+            ],
+        ),
         ref_fwd=100.0,
         t_e=1.0,
     )

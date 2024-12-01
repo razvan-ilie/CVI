@@ -31,9 +31,8 @@ class CubicSpline:
         skew: float,
         locs: npt.NDArray[np.float64],
         crvs: npt.NDArray[np.float64],
-        zero_idx: int | None = None,
     ):
-        zero_idx = zero_idx or next(i for i, loc in enumerate(locs) if loc == 0.0)
+        zero_idx = next(i for i, loc in enumerate(locs) if loc == 0.0)
         num_polys = len(locs) + 1
         params = np.empty(shape=(num_polys, 4), dtype=float)
 
