@@ -46,11 +46,11 @@ class CviSlice:
         real_params: CviRealParams,
         ref_fwd: float,
         t_e: float,
-        atm_anchor_var: float | None = None,
+        atm_anchor_vol: float | None = None,
     ) -> Self:
         spline_params = CviCubicBSplineParams.from_real_params(real_params)
         return cls(
-            cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var
+            cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_vol**2
         )
 
     @classmethod
@@ -65,6 +65,14 @@ class CviSlice:
         return cls(
             cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var
         )
+
+    @property
+    def atm_anchor_var(self):
+        return self._atm_anchor_var
+
+    @property
+    def atm_anchor_vol(self):
+        return sqrt(self._atm_anchor_var)
 
     def var_deriv1_deriv2_z(
         self, z: npt.NDArray[np.float64] | float
