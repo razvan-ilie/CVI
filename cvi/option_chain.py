@@ -3,7 +3,7 @@ from pandera.typing import Series
 
 
 class OptionChain(pa.DataFrameModel):
-    expiry: Series[pa.DateTime] = pa.Field()
+    expiry: Series[pa.DateTime] = pa.Field(coerce=True)
     strike: Series[float] = pa.Field()
     t_e: Series[float] = pa.Field()
     c_bid: Series[float] = pa.Field(nullable=True)
