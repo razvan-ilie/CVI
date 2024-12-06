@@ -39,9 +39,9 @@ class CviRealParams:
     def from_spline_params(cls, p: "CviCubicBSplineParams") -> Self:
         locs = p.knots[3:-3]
 
-        atm_var = cast(float, splev(0.0, p.tck()))
-        skew = cast(float, splev(0.0, p.tck(), der=1))
-        crvs = splev(locs, p.tck(), der=2)
+        atm_var = cast(float, splev(0.0, p.tck))
+        skew = cast(float, splev(0.0, p.tck, der=1))
+        crvs = splev(locs, p.tck, der=2)
 
         nodes = [CviNode(loc, crv) for loc, crv in zip(locs, crvs)]
 
@@ -68,11 +68,12 @@ class CviCubicBSplineParams:
         self.coeffs = coeffs
 
         derivs: np.ndarray = splev(
-            [self.knots[0], self.knots[-1]], self.tck(), der=1, ext=1
+            [self.knots[0], self.knots[-1]], self.tck, der=1, ext=1
         )
         self.deriv_left = cast(float, derivs[0])
         self.deriv_right = cast(float, derivs[1])
 
+    @property
     def tck(self):
         return self.knots, self.coeffs, 3
 
@@ -95,3 +96,35 @@ class CviCubicBSplineParams:
         coeffs = solve(mat, b)
 
         return cls(knots, coeffs)
+
+    def val_basis_funcs(
+        self, x: npt.NDArray[np.float64], der: int
+    ) -> npt.NDArray[np.float64]:
+        """Returns a matrix of floats where each row corresponds to the
+           value (or nth derivative) of each basis function for a fixed x.
+           Each column would then correspond to value of one fixed basis
+           function for all x.
+
+        Args:
+            x (npt.NDArray[np.float64]): inputs to evaluate basis functions at.
+                size: n x 1
+            der (int): nth derivative to take
+
+        Returns:
+            npt.NDArray[np.float64]: matrix of values (or nth derivatives)
+                of each basis function at each input value.
+                size: n x m, where n is the length of the input x and
+                m is the number of coefficients
+        """
+        n = len(x)
+        m = len(self.knots) - 4
+        res = np.zeros((n, m))
+        t, _, k = self.tck
+        c = np.zeros(m)
+        for i in range(m):
+            c[i] = 1.0
+            if i != 0:
+                c[i - 1] = 0
+            res[:, i] = splev(x, (t, c, k), der=der, ext=1)
+
+        return res
