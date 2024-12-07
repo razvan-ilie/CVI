@@ -2,6 +2,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.interpolate import splev
 from scipy.linalg import solve
+from scipy.sparse import csc_matrix
 from typing import cast, Self
 
 from .node import CviNode
@@ -97,9 +98,7 @@ class CviCubicBSplineParams:
 
         return cls(knots, coeffs)
 
-    def val_basis_funcs(
-        self, x: npt.NDArray[np.float64], der: int
-    ) -> npt.NDArray[np.float64]:
+    def val_basis_funcs(self, x: npt.NDArray[np.float64], der: int) -> csc_matrix:
         """Returns a matrix of floats where each row corresponds to the
            value (or nth derivative) of each basis function for a fixed x.
            Each column would then correspond to value of one fixed basis
@@ -127,4 +126,4 @@ class CviCubicBSplineParams:
                 c[i - 1] = 0
             res[:, i] = splev(x, (t, c, k), der=der, ext=1)
 
-        return res
+        return csc_matrix(res)

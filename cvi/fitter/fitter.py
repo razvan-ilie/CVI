@@ -1,7 +1,9 @@
+import clarabel as cb
 import pandas as pd
 import numpy as np
 import numpy.typing as npt
 from pandera.typing import DataFrame, Series
+from scipy.sparse import csc_matrix, bmat
 
 from cvi.option_chain import OptionChain
 from cvi.slice import CviRealParams, CviNode, CviSlice
@@ -24,11 +26,17 @@ class CviVolFitter:
         fitter_options: CviVolFitterOptions,
     ):
         self._initialize(chain, node_locs)
-        # weights_mat = self.weights(fitter_options)
-        # mid_var = self._mid_chain["iv_mid"] ** 2
-        self._mid_chain["z"] = self._mid_chain.apply(
-            lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1
-        )
+        weights_mat = self.weights(fitter_options)
+        mid_var = self._mid_chain["iv_mid"] ** 2
+        basis_val_mat = self.basis_val_matrix()
+        P = basis_val_mat.T @ weights_mat @ basis_val_mat
+        q = -basis_val_mat.T @ weights_mat @ mid_var
+
+        settings = cb.DefaultSettings()
+        solver = cb.DefaultSolver(P, q, None, None, None, settings)
+        sol = solver.solve()
+
+        return sol
 
     def weights(self, fitter_options: CviVolFitterOptions) -> npt.NDArray[np.float64]:
         if fitter_options.weighting_least_sq == "vol_spread":
@@ -49,20 +57,16 @@ class CviVolFitter:
 
         return np.eye(self._mid_chain.shape[0])
 
-    def basis_val_matrix(self):
-        ####
-        self._mid_chain["z"] = self._mid_chain.apply(
-            lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1
-        )
-        ####
-
+    def basis_val_matrix(self) -> csc_matrix:
         mats = self._mid_chain.groupby("expiry")[["expiry", "z"]].apply(
             lambda df_exp: self._slices[
                 df_exp["expiry"].iloc[0]
             ].spline_params.val_basis_funcs(df_exp["z"], der=0),
             include_groups=False,
         )
-        return mats
+
+        blocks = [[None, mat, None] for mat in mats]
+        return bmat(blocks, format="csc")
 
     def _initialize(
         self,
@@ -90,7 +94,14 @@ class CviVolFitter:
                 atm_anchor_vol,
             )
 
+        chain["z"] = chain.apply(
+            lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1
+        )
+
         self._mid_chain = chain[chain["iv_mid"].notna()]
+        self._mid_chain = self._mid_chain[
+            self._mid_chain["z"].between(node_locs[0], node_locs[-1])
+        ]
 
         num_mids_by_exp = self._mid_chain.groupby("expiry").count()["iv_mid"]
         self._mid_chain_num_mids = self._mid_chain["expiry"].apply(

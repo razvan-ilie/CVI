@@ -1,9 +1,9 @@
 from typing import Literal
-import pydantic
+from pydantic import BaseModel, Field
 
 
-class CviVolFitterOptions(pydantic.BaseModel):
-    weighting_least_sq: Literal["vol_spread"] | None
-    weighting_above_ask: Literal["vega"] | None
-    weighting_below_bid: Literal["vega"] | None
-    strike_regularization_factor: float | None
+class CviVolFitterOptions(BaseModel):
+    weighting_least_sq: Literal["vol_spread"] | None = Field(default="vol_spread")
+    weighting_above_ask: Literal["vega"] | None = Field(default="vega")
+    weighting_below_bid: Literal["vega"] | None = Field(default="vega")
+    strike_regularization_factor: float | None = Field(default=0.05)
