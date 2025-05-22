@@ -1,10 +1,11 @@
-import numpy as np
-import numpy.typing as npt
 from math import sqrt
-from scipy.interpolate import splev
 from typing import Self
 
-from .params import CviRealParams, CviCubicBSplineParams
+import numpy as np
+import numpy.typing as npt
+from scipy.interpolate import splev
+
+from .params import CviCubicBSplineParams, CviRealParams
 
 
 class CviSlice:
@@ -50,9 +51,7 @@ class CviSlice:
     ) -> Self:
         spline_params = CviCubicBSplineParams.from_real_params(real_params)
         atm_anchor_var = atm_anchor_vol**2 if atm_anchor_vol is not None else None
-        return cls(
-            cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var
-        )
+        return cls(cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var)
 
     @classmethod
     def from_spline_params(
@@ -63,9 +62,7 @@ class CviSlice:
         atm_anchor_var: float | None = None,
     ) -> Self:
         real_params = CviRealParams.from_spline_params(spline_params)
-        return cls(
-            cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var
-        )
+        return cls(cls._create_key, real_params, spline_params, ref_fwd, t_e, atm_anchor_var)
 
     @property
     def atm_anchor_var(self):
@@ -76,31 +73,23 @@ class CviSlice:
         return sqrt(self._atm_anchor_var)
 
     def var_deriv1_deriv2_z(
-        self, z: npt.NDArray[np.float64] | float
-    ) -> tuple[
-        npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]
-    ]:
-        right_extrap = np.where(
-            z <= self.real_params.locs[-1], 0.0, z - self.real_params.locs[-1]
-        )
-        left_extrap = np.where(
-            z >= self.real_params.locs[0], 0.0, z - self.real_params.locs[0]
-        )
+        self, z: npt.NDArray | float
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+        right_extrap = np.where(z <= self.real_params.locs[-1], 0.0, z - self.real_params.locs[-1])
+        left_extrap = np.where(z >= self.real_params.locs[0], 0.0, z - self.real_params.locs[0])
         return (
-            splev(z, self.spline_params.tck(), ext=3)
+            splev(z, self.spline_params.tck, ext=3)
             + right_extrap * self.spline_params.deriv_right
             + left_extrap * self.spline_params.deriv_left,
-            splev(z, self.spline_params.tck(), der=1, ext=1)
-            + (z > self.real_params.locs[-1]) * self.spline_params.deriv_right
+            splev(z, self.spline_params.tck, der=1, ext=1)  # type: ignore
+            + (z > self.real_params.locs[-1]) * self.spline_params.deriv_right  # type: ignore
             + (z < self.real_params.locs[0]) * self.spline_params.deriv_left,
-            splev(z, self._spline_params.tck(), der=2, ext=1),
+            splev(z, self.spline_params.tck, der=2, ext=1),  # type: ignore
         )
 
     def vol_deriv1_deriv2_z(
         self, z: npt.NDArray[np.float64] | float
-    ) -> tuple[
-        npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]
-    ]:
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         vals = self.var_deriv1_deriv2_z(z)
 
         vols = np.sqrt(vals[0])
@@ -110,10 +99,8 @@ class CviSlice:
         return vols, deriv1_vols_z, deriv2_vols_z
 
     def vol_deriv1_deriv2_k(
-        self, k: npt.NDArray[np.float64] | float
-    ) -> tuple[
-        npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]
-    ]:
+        self, k: npt.NDArray | float
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         z = self.k_to_z(k)
 
         vals = self.var_deriv1_deriv2_z(z)
@@ -128,5 +115,5 @@ class CviSlice:
 
         return vols, deriv1_vols_k, deriv2_vols_k
 
-    def k_to_z(self, k: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    def k_to_z(self, k: npt.NDArray | float) -> npt.NDArray:
         return np.log(k / self._ref_fwd) / self._z_denom

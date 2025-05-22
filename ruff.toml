@@ -1,0 +1,47 @@
+line-length = 100
+
+[lint]
+extend-select = [
+    "N",
+    "UP",
+    "B",
+    "A",
+    "DTZ",
+    "PL",
+    "PTH",
+    "Q",
+    "PT",
+    "RET",
+    "SIM",
+    "TD",
+    "TRY",
+    "PERF",
+    "RUF",
+    "I",
+]
+extend-ignore = [
+    "E402",
+    "E731",
+    "PTH123",
+    "PLR0913",
+    "PLR2004",
+    "PLR6201",
+    "DTZ011",
+    "RET505",
+    "RET504",
+    "PD901",
+    "PT011",
+    "PT001",
+    "PT023",
+    "TD002",
+    "TD003",
+]
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.per-file-ignores]
+"**/*.ipynb" = ["PLE1142"]
+
+[format]
+preview = true

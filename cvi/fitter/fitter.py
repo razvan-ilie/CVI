@@ -1,12 +1,11 @@
 import clarabel as cb
-import pandas as pd
 import numpy as np
-import numpy.typing as npt
+import pandas as pd
 from pandera.typing import DataFrame, Series
-from scipy.sparse import csc_matrix, bmat
+from scipy.sparse import bmat, csc_matrix
 
 from cvi.option_chain import OptionChain
-from cvi.slice import CviRealParams, CviNode, CviSlice
+from cvi.slice import CviNode, CviRealParams, CviSlice
 
 from .fitter_options import CviVolFitterOptions
 
@@ -38,11 +37,9 @@ class CviVolFitter:
 
         return sol
 
-    def weights(self, fitter_options: CviVolFitterOptions) -> npt.NDArray[np.float64]:
+    def weights(self, fitter_options: CviVolFitterOptions) -> np.ndarray:
         if fitter_options.weighting_least_sq == "vol_spread":
-            inverse_vol_spreads = 1.0 / (
-                self._mid_chain["iv_ask"] - self._mid_chain["iv_bid"]
-            )
+            inverse_vol_spreads = 1.0 / (self._mid_chain["iv_ask"] - self._mid_chain["iv_bid"])
             sum_inverse_vol_spreads = inverse_vol_spreads.sum()
             sum_inverse_var_spreads = (
                 1.0 / (self._mid_chain["iv_ask"] ** 2 - self._mid_chain["iv_bid"] ** 2)
@@ -59,9 +56,9 @@ class CviVolFitter:
 
     def basis_val_matrix(self) -> csc_matrix:
         mats = self._mid_chain.groupby("expiry")[["expiry", "z"]].apply(
-            lambda df_exp: self._slices[
-                df_exp["expiry"].iloc[0]
-            ].spline_params.val_basis_funcs(df_exp["z"], der=0),
+            lambda df_exp: self._slices[df_exp["expiry"].iloc[0]].spline_params.val_basis_funcs(
+                df_exp["z"], der=0
+            ),
             include_groups=False,
         )
 
@@ -79,9 +76,7 @@ class CviVolFitter:
             fwd = df["fwd_mid"].iloc[0]
             t_e = df["t_e"].iloc[0]
             # take vol nearest to the forward as the anchor
-            atm_anchor_vol = df.iloc[(df["strike"] - fwd).abs().argsort().iloc[0]][
-                "iv_mid"
-            ]
+            atm_anchor_vol = df.iloc[(df["strike"] - fwd).abs().argsort().iloc[0]]["iv_mid"]
 
             self._slices[exp] = CviSlice.from_real_params(
                 CviRealParams(
@@ -94,16 +89,10 @@ class CviVolFitter:
                 atm_anchor_vol,
             )
 
-        chain["z"] = chain.apply(
-            lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1
-        )
+        chain["z"] = chain.apply(lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1)
 
         self._mid_chain = chain[chain["iv_mid"].notna()]
-        self._mid_chain = self._mid_chain[
-            self._mid_chain["z"].between(node_locs[0], node_locs[-1])
-        ]
+        self._mid_chain = self._mid_chain[self._mid_chain["z"].between(node_locs[0], node_locs[-1])]
 
         num_mids_by_exp = self._mid_chain.groupby("expiry").count()["iv_mid"]
-        self._mid_chain_num_mids = self._mid_chain["expiry"].apply(
-            lambda exp: num_mids_by_exp[exp]
-        )
+        self._mid_chain_num_mids = self._mid_chain["expiry"].apply(lambda exp: num_mids_by_exp[exp])

@@ -1,5 +1,5 @@
-__all__ = ["CviNode", "CviRealParams", "CviCubicBSplineParams", "CviSlice"]
+__all__ = ["CviCubicBSplineParams", "CviNode", "CviRealParams", "CviSlice"]
 
 from .node import CviNode
-from .params import CviRealParams, CviCubicBSplineParams
+from .params import CviCubicBSplineParams, CviRealParams
 from .slice import CviSlice

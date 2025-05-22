@@ -1,9 +1,10 @@
+from typing import Self, cast
+
 import numpy as np
 import numpy.typing as npt
 from scipy.interpolate import splev
 from scipy.linalg import solve
 from scipy.sparse import csc_matrix
-from typing import cast, Self
 
 from .node import CviNode
 
@@ -68,9 +69,7 @@ class CviCubicBSplineParams:
         self.knots = knots
         self.coeffs = coeffs
 
-        derivs: np.ndarray = splev(
-            [self.knots[0], self.knots[-1]], self.tck, der=1, ext=1
-        )
+        derivs: np.ndarray = splev([self.knots[0], self.knots[-1]], self.tck, der=1, ext=1)  # type: ignore
         self.deriv_left = cast(float, derivs[0])
         self.deriv_right = cast(float, derivs[1])
 
@@ -93,7 +92,7 @@ class CviCubicBSplineParams:
             mat[n - 2, i] = splev(0.0, (knots, c, 3), der=1, ext=1)
             mat[n - 1, i] = splev(0.0, (knots, c, 3), der=0, ext=1)
 
-        b = p.crvs + [p.skew, p.atm_var]
+        b = [*p.crvs, p.skew, p.atm_var]
         coeffs = solve(mat, b)
 
         return cls(knots, coeffs)
