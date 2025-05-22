@@ -3,4 +3,3 @@
 __pycache__
 .ruff_cache
 uv.lock
-**/example.ipynb
