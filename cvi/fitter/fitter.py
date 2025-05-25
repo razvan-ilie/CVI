@@ -2,10 +2,10 @@ import clarabel as cb
 import numpy as np
 import pandas as pd
 from pandera.typing import DataFrame, Series
-from scipy.sparse import bmat, csc_matrix
+from scipy.sparse import block_array, csc_matrix
 
 from cvi.option_chain import OptionChain
-from cvi.slice import CviNode, CviRealParams, CviSlice
+from cvi.slice import CviCubicBSplineParams, CviNode, CviRealParams, CviSlice
 
 from .fitter_options import CviVolFitterOptions
 
@@ -15,55 +15,92 @@ class CviVolFitter:
     _mid_chain: DataFrame[OptionChain]
     _mid_chain_num_mids: Series[int]
 
-    def __init__(self):
+    def __init__(self, fitter_options: CviVolFitterOptions | None = None):
         self._slices = dict()
+        self.fitter_options: CviVolFitterOptions = fitter_options or CviVolFitterOptions()
 
     def fit(
         self,
         chain: DataFrame[OptionChain],
         node_locs: list[float],
-        fitter_options: CviVolFitterOptions,
-    ):
+    ) -> dict[pd.Timestamp, CviSlice]:
         self._initialize(chain, node_locs)
-        weights_mat = self.weights(fitter_options)
+        weights_least_sq_mat = self.weights_least_sq(self.fitter_options)
         mid_var = self._mid_chain["iv_mid"] ** 2
         basis_val_mat = self.basis_val_matrix()
-        P = basis_val_mat.T @ weights_mat @ basis_val_mat
-        q = -basis_val_mat.T @ weights_mat @ mid_var
+
+        P_mat = csc_matrix(basis_val_mat.T @ weights_least_sq_mat @ basis_val_mat)
+        q_vec = -basis_val_mat.T @ weights_least_sq_mat @ mid_var
+        num_mids = q_vec.shape[0]
+        A_mat = csc_matrix(-1.0 * np.eye(num_mids))
+        b_vec = np.zeros(num_mids)
+
+        cones = [cb.NonnegativeConeT(num_mids)]
 
         settings = cb.DefaultSettings()
-        solver = cb.DefaultSolver(P, q, None, None, None, settings)
+        solver = cb.DefaultSolver(P_mat, q_vec, A_mat, b_vec, cones, settings)
         sol = solver.solve()
 
-        return sol
+        expiries = list()
+        for exp in self._mid_chain["expiry"]:
+            if exp not in expiries:
+                expiries.append(exp)
 
-    def weights(self, fitter_options: CviVolFitterOptions) -> np.ndarray:
-        if fitter_options.weighting_least_sq == "vol_spread":
-            inverse_vol_spreads = 1.0 / (self._mid_chain["iv_ask"] - self._mid_chain["iv_bid"])
-            sum_inverse_vol_spreads = inverse_vol_spreads.sum()
-            sum_inverse_var_spreads = (
-                1.0 / (self._mid_chain["iv_ask"] ** 2 - self._mid_chain["iv_bid"] ** 2)
-            ).sum()
+        for i, exp in enumerate(expiries):
+            original_slice = self._slices[exp]
+            num_params = len(original_slice.spline_params.coeffs)
 
-            return np.diag(
-                inverse_vol_spreads
-                / sum_inverse_vol_spreads
-                * sum_inverse_var_spreads
-                / self._mid_chain_num_mids
+            self._slices[exp] = CviSlice.from_spline_params(
+                CviCubicBSplineParams(
+                    knots=original_slice.spline_params.knots,
+                    coeffs=sol.x[i * num_params + 1 : (i + 1) * num_params - 1],
+                ),
+                original_slice._ref_fwd,
+                original_slice._t_e,
+                atm_anchor_var=original_slice._atm_anchor_var,
             )
 
-        return np.eye(self._mid_chain.shape[0])
+        return self._slices
+
+    def weights_least_sq(self, fitter_options: CviVolFitterOptions) -> np.ndarray:
+        """The weight to apply to each error term in the least squares penalty."""
+        if fitter_options.weighting_least_sq == "var_spread":
+            var_spreads = self._mid_chain["iv_ask"] ** 2 - self._mid_chain["iv_bid"] ** 2
+            return np.diag(var_spreads / self._mid_chain_num_mids)
+        elif fitter_options.weighting_least_sq == "none":
+            return np.eye(self._mid_chain.shape[0])
+        else:
+            raise NotImplementedError(
+                f"{fitter_options.weighting_least_sq} weighting not implemented"
+            )
 
     def basis_val_matrix(self) -> csc_matrix:
-        mats = self._mid_chain.groupby("expiry")[["expiry", "z"]].apply(
-            lambda df_exp: self._slices[df_exp["expiry"].iloc[0]].spline_params.val_basis_funcs(
-                df_exp["z"], der=0
+        # Create a mapping from expiry to a unique index, preserving first-seen order
+        expiry_order = []
+        expiry_to_idx = {}
+        for exp in self._mid_chain["expiry"]:
+            if exp not in expiry_to_idx:
+                expiry_to_idx[exp] = len(expiry_order)
+                expiry_order.append(exp)
+
+        # Return a Series of (basis_func_result, expiry_index) tuples
+        mats_and_indexes = self._mid_chain.apply(
+            lambda row: (
+                self._slices[row["expiry"]].spline_params.val_basis_funcs(
+                    row["z"],  # type: ignore
+                    der=0,
+                ),
+                expiry_to_idx[row["expiry"]],
             ),
-            include_groups=False,
+            axis=1,
         )
 
-        blocks = [[None, mat, None] for mat in mats]
-        return bmat(blocks, format="csc")
+        blocks = [
+            [None] * idx + [mat] + [None] * (len(expiry_order) - idx - 1)
+            for mat, idx in mats_and_indexes.values
+        ]
+
+        return block_array(blocks).toarray()  # type: ignore
 
     def _initialize(
         self,

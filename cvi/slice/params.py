@@ -114,7 +114,7 @@ class CviCubicBSplineParams:
                 size: n x m, where n is the length of the input x and
                 m is the number of coefficients
         """
-        n = len(x)
+        n = 1 if isinstance(x, float) else len(x)
         m = len(self.knots) - 4
         res = np.zeros((n, m))
         t, _, k = self.tck
