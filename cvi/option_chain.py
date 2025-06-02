@@ -4,6 +4,9 @@ from pandera.typing import Series
 
 class OptionChain(pa.DataFrameModel):
     expiry: Series[pa.DateTime] = pa.Field(coerce=True)
+    num_mids_at_expiry: Series[int] = pa.Field(nullable=True)
+    num_bids_at_expiry: Series[int] = pa.Field(nullable=True)
+    num_asks_at_expiry: Series[int] = pa.Field(nullable=True)
     strike: Series[float] = pa.Field()
     t_e: Series[float] = pa.Field()
     c_bid: Series[float] = pa.Field(nullable=True)

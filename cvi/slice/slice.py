@@ -8,6 +8,13 @@ from scipy.interpolate import splev
 from .params import CviCubicBSplineParams, CviRealParams
 
 
+class CviSliceInitError(ValueError):
+    def __init__(self):
+        super().__init__(
+            "CviSlice objects should be created using 'from_real_params' or 'from_spline_params'!"
+        )
+
+
 class CviSlice:
     real_params: CviRealParams
     spline_params: CviCubicBSplineParams
@@ -30,9 +37,7 @@ class CviSlice:
         atm_anchor_var: float | None = None,
     ):
         if key != CviSlice._create_key:
-            raise ValueError(
-                "CviSlice objects should be created using 'from_real_params' or 'from_spline_params'!"
-            )
+            raise CviSliceInitError()
 
         self.real_params = real_params
         self.spline_params = spline_params
@@ -73,7 +78,7 @@ class CviSlice:
         return sqrt(self._atm_anchor_var)
 
     def var_deriv1_deriv2_z(
-        self, z: npt.NDArray | float
+        self, z: np.ndarray | float
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         right_extrap = np.where(z <= self.real_params.locs[-1], 0.0, z - self.real_params.locs[-1])
         left_extrap = np.where(z >= self.real_params.locs[0], 0.0, z - self.real_params.locs[0])
@@ -88,7 +93,7 @@ class CviSlice:
         )
 
     def vol_deriv1_deriv2_z(
-        self, z: npt.NDArray[np.float64] | float
+        self, z: np.ndarray | float
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         vals = self.var_deriv1_deriv2_z(z)
 

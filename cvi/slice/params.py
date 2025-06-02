@@ -9,6 +9,22 @@ from scipy.sparse import csc_matrix
 from .node import CviNode
 
 
+class CviNoZeroNodeError(ValueError):
+    """Raised when the initialization of CviRealParams fails due to invalid parameters."""
+
+    def __init__(self):
+        super().__init__("Nodes must contain a node at z = 0")
+
+
+class CviNonZeroEdgeNodeError(ValueError):
+    """Raised when the initialization of CviRealParams fails due to non-zero curvature at the edges."""
+
+    def __init__(self, first_node: bool, received_value: float):
+        super().__init__(
+            f"{'First' if first_node else 'Last'} node must have a curvature of 0. Received {received_value}"
+        )
+
+
 class CviRealParams:
     atm_var: float
     skew: float  # d variance / d z
@@ -25,11 +41,19 @@ class CviRealParams:
         self.nodes = sorted(nodes, key=lambda n: n.loc)
 
         if not any(node.is_zero for node in self.nodes):
-            raise ValueError("Nodes must contain a node at z = 0")
+            raise CviNoZeroNodeError()
         if self.nodes[0].crv != 0.0:
-            raise ValueError("First node must have a curvature of 0")
+            if abs(self.nodes[0].crv) < 1e-14:
+                self.nodes[0].crv = 0.0
+            else:
+                raise CviNonZeroEdgeNodeError(first_node=True, received_value=self.nodes[0].crv)
         if self.nodes[-1].crv != 0.0:
-            raise ValueError("Last node must have a curvature of 0")
+            if abs(self.nodes[-1].crv) < 1e-14:
+                self.nodes[-1].crv = 0.0
+            else:
+                raise CviNonZeroEdgeNodeError(
+                    first_node=False, received_value=self.nodes[0 - 1].crv
+                )
 
         self.atm_var = atm_var
         self.skew = -skew / 100.0
@@ -97,7 +121,7 @@ class CviCubicBSplineParams:
 
         return cls(knots, coeffs)
 
-    def val_basis_funcs(self, x: npt.NDArray[np.float64], der: int) -> csc_matrix:
+    def val_basis_funcs(self, x: np.ndarray | float, der: int) -> csc_matrix:
         """Returns a matrix of floats where each row corresponds to the
            value (or nth derivative) of each basis function for a fixed x.
            Each column would then correspond to value of one fixed basis
