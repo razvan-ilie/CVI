@@ -23,6 +23,8 @@ class CviVolFitter:
         self,
         chain: DataFrame[OptionChain],
         node_locs: list[float],
+        *,
+        verbose: bool = False,
     ) -> dict[pd.Timestamp, CviSlice]:
         chain_annotated = self._annotate_chain(chain, node_locs)
         weights_least_sq_mat = self._weights_least_sq(chain_annotated, self.fitter_options)
@@ -43,6 +45,7 @@ class CviVolFitter:
         a_mat, b_vec, cones = self.constraints(chain_annotated, node_locs)
 
         settings = cb.DefaultSettings()
+        settings.verbose = verbose
         solver = cb.DefaultSolver(p_mat, q_vec, a_mat, b_vec, cones, settings)
         sol = solver.solve()
 
