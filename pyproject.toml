@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "clarabel<=0.10.0",
+    "nbformat>=5.10.4",
     "numpy<=2.2.6",
     "pandas<=2.2.3",
     "pandera<=0.21.1",
@@ -17,6 +18,6 @@ dependencies = [
 dev = [
     "ipykernel<=6.29.5",
     "ruff<=0.11.10",
-    "matplotlib<=3.9.2",
     "ipywidgets>=8.1.7",
+    "plotly>=6.1.2",
 ]

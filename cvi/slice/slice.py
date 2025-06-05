@@ -122,3 +122,6 @@ class CviSlice:
 
     def k_to_z(self, k: npt.NDArray | float) -> npt.NDArray:
         return np.log(k / self._ref_fwd) / self._z_denom
+
+    def z_to_k(self, z: npt.NDArray | float) -> npt.NDArray:
+        return self._ref_fwd * np.exp(z * self._z_denom)
