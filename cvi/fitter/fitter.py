@@ -15,9 +15,9 @@ from .fitter_options import CviVolFitterOptions
 class CviVolFitter:
     _slices: dict[pd.Timestamp, CviSlice]
 
-    def __init__(self, fitter_options: CviVolFitterOptions | None = None):
+    def __init__(self, fitter_options: CviVolFitterOptions):
         self._slices = dict()
-        self.fitter_options: CviVolFitterOptions = fitter_options or CviVolFitterOptions()
+        self.fitter_options: CviVolFitterOptions = fitter_options
 
     def fit(
         self,
@@ -33,7 +33,7 @@ class CviVolFitter:
         basis_value_matrix = self._basis_value_matrix(chain_annotated)
 
         # TODO: Add below bid and above ask penalties
-        # For the above ask and below bid penalties, we need to add a slack variable >= 0 for
+        # For the above ask and below bid penalties, we need to add an auxiliary variable >= 0 for
         # each (strike, expiry) pair that has a bid (ask) but no ask (bid) and enforce the
         # constraint that the slack variable be >= (CVI variance - ask variance) or
         # >= (bid variance - CVI variance). We minimize the weighted sum of the square of
@@ -117,7 +117,7 @@ class CviVolFitter:
 
     def _basis_value_matrix(self, chain: DataFrame[OptionChain]) -> csc_matrix:
         """The basis value matrix for the spline basis functions."""
-        mats = chain.groupby("expiry")[["expiry", "z"]].apply(
+        matrices = chain.groupby("expiry")[["expiry", "z"]].apply(
             lambda df_exp: self._slices[df_exp["expiry"].iloc[0]].spline_params.val_basis_funcs(  # type: ignore
                 df_exp["z"],  # type: ignore
                 der=0,
@@ -125,7 +125,9 @@ class CviVolFitter:
             include_groups=False,
         )
 
-        blocks = [[None] * i + [mat] + [None] * (len(mats) - i - 1) for i, mat in enumerate(mats)]
+        blocks = [
+            [None] * i + [mat] + [None] * (len(matrices) - i - 1) for i, mat in enumerate(matrices)
+        ]
 
         return csc_matrix(block_array(blocks))
 
@@ -339,9 +341,10 @@ class CviVolFitter:
             # take vol nearest to the forward as the anchor
             atm_anchor_vol = df.iloc[(df["strike"] - fwd).abs().argsort().iloc[0]]["iv_mid"]
 
+            # Set up a dummy slice with the starting parameters
             self._slices[exp] = CviSlice.from_real_params(
                 CviRealParams(
-                    atm_var=atm_anchor_vol,
+                    atm_var=atm_anchor_vol**2,
                     skew=0.0,
                     nodes=[CviNode(loc, 0.0) for loc in node_locs],
                 ),
@@ -352,7 +355,13 @@ class CviVolFitter:
 
         chain["z"] = chain.apply(lambda r: self._slices[r["expiry"]].k_to_z(r["strike"]), axis=1)
 
+        # TODO: once the penalties for being outside bid/ask are added, we should not be keeping quotes with only mid vols
+        # As described in the paper, it is actually a good idea to apply
+        # the penalty for being above the ask to quotes that have an ask vol and no bid vol.
+        # Analogous thing for bids.
         annotated_chain = chain[chain["iv_mid"].notna()]
+        # TODO: once the penalty for above ask is added, we should include options
+        # that have an ask vol outside our range of chosen zs (as described in the paper)
         annotated_chain = annotated_chain[annotated_chain["z"].between(node_locs[0], node_locs[-1])]
 
         for q_type in ("bid", "ask", "mid"):
