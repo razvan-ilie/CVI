@@ -33,3 +33,10 @@ class OptionChain(pa.DataFrameModel):
     vega_bid: Series[float] = pa.Field(nullable=True)
     vega_ask: Series[float] = pa.Field(nullable=True)
     vega_mid: Series[float] = pa.Field(nullable=True)
+
+
+class EnrichedOptionChain(OptionChain):
+    z: Series[float] = pa.Field(nullable=True)
+    var_bid: Series[float] = pa.Field(nullable=True)
+    var_mid: Series[float] = pa.Field(nullable=True)
+    var_ask: Series[float] = pa.Field(nullable=True)
