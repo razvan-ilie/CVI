@@ -99,7 +99,7 @@ class CviSlice:
 
         vols = np.sqrt(vals[0])
         deriv1_vols_z = vals[1] / (2.0 * vols)
-        deriv2_vols_z = (0.5 * vals[2] - deriv1_vols_z**2.0) / vols
+        deriv2_vols_z = (0.5 * vals[2] - deriv1_vols_z**2) / vols
 
         return vols, deriv1_vols_z, deriv2_vols_z
 
@@ -108,17 +108,12 @@ class CviSlice:
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         z = self.k_to_z(k)
 
-        vals = self.var_deriv1_deriv2_z(z)
+        vals = self.vol_deriv1_deriv2_z(z)
 
-        vols = np.sqrt(vals[0])
+        deriv1_vols_k = vals[1] / k / self._z_denom
 
-        deriv1_vols_z = vals[1] / (2.0 * vols)
-        deriv1_vols_k = deriv1_vols_z / k
-
-        deriv2_vols_z = (0.5 * vals[2] - deriv1_vols_z**2.0) / vols
-        deriv2_vols_k = deriv2_vols_z / k - deriv1_vols_z / (k**2.0)
-
-        return vols, deriv1_vols_k, deriv2_vols_k
+        deriv2_vols_k = vals[2] / (k**2) / (self._z_denom**2) - vals[1] / (k**2.0) / self._z_denom
+        return vals[0], deriv1_vols_k, deriv2_vols_k
 
     def k_to_z(self, k: npt.NDArray | float) -> npt.NDArray:
         return np.log(k / self._ref_fwd) / self._z_denom
